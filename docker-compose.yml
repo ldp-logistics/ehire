@@ -1,0 +1,46 @@
+services:
+  app:
+    image: ${APP_IMAGE}
+    env_file:
+      - .env
+    expose:
+      - "5000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - backend
+      - traefik_public
+    labels:
+      - "traefik.enable=true"
+ 
+      # HTTP Router (Redirects to HTTPS)
+      - "traefik.http.routers.app-${PROJECT_NAME}.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)"
+      - "traefik.http.routers.app-${PROJECT_NAME}.entrypoints=web"
+      - "traefik.http.routers.app-${PROJECT_NAME}.middlewares=redirect-to-https"
+ 
+      # HTTPS Router
+      - "traefik.http.routers.app-secure-${PROJECT_NAME}.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)"
+      - "traefik.http.routers.app-secure-${PROJECT_NAME}.entrypoints=websecure"
+      - "traefik.http.routers.app-secure-${PROJECT_NAME}.tls=true"
+      - "traefik.http.routers.app-secure-${PROJECT_NAME}.tls.certresolver=myresolver"
+      - "traefik.http.routers.app-secure-${PROJECT_NAME}.middlewares=security-headers,redirect-to-nonwww"
+ 
+      # Service Definition
+      - "traefik.http.services.app-${PROJECT_NAME}.loadbalancer.server.port=5000"
+      - "traefik.http.services.app-${PROJECT_NAME}.loadbalancer.healthcheck.path=/api/health"
+      - "traefik.http.services.app-${PROJECT_NAME}.loadbalancer.healthcheck.interval=10s"
+      - "traefik.http.services.app-${PROJECT_NAME}.loadbalancer.healthcheck.timeout=3s"
+
+volumes:
+  postgres_backups:
+    driver: local
+ 
+networks:
+  backend:
+    driver: bridge
+  traefik_public:
+    external: true

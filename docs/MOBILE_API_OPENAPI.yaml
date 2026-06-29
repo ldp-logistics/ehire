@@ -1,0 +1,1091 @@
+openapi: 3.0.3
+info:
+  title: eHire — Mobile API
+  description: |
+    Contract for React Native (Expo) clients. Base path `/api` (no versioning).
+
+    **Auth:** `Authorization: Bearer <jwt>` on all protected routes. JWT is returned in
+    `POST /api/auth/login` body as `token` (7-day expiry; no refresh endpoint).
+
+    **Response envelopes:** Mixed — see `x-envelope` on each operation. Prefer parsing
+    both `{ success, data }` and raw JSON arrays/objects.
+  version: 1.0.0
+  contact:
+    name: LDP HR / eHire
+
+servers:
+  - url: https://{host}
+    description: Production (set EXPO_PUBLIC_API_URL in app)
+    variables:
+      host:
+        default: ehire.example.com
+
+tags:
+  - name: Auth
+  - name: Attendance
+  - name: Leave
+  - name: Dashboard
+  - name: Notifications
+  - name: Employees
+  - name: ChangeRequests
+  - name: Feed
+  - name: ITSupport
+  - name: Teams
+  - name: Tasks
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT from POST /api/auth/login (`token` field). Expires in 7 days.
+
+  schemas:
+    ErrorLegacy:
+      type: object
+      properties:
+        error:
+          oneOf:
+            - type: string
+            - type: object
+              properties:
+                code: { type: string }
+                message: { type: string }
+
+    ErrorEnvelope:
+      type: object
+      required: [success, error]
+      properties:
+        success: { type: boolean, enum: [false] }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, example: VALIDATION_ERROR }
+            message: { type: string }
+
+    SuccessEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: {}
+        message: { type: string }
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    PaginationMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+        hasNext: { type: boolean }
+        hasPrev: { type: boolean }
+
+    AuthUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { type: string }
+        effectiveRole: { type: string }
+        roles: { type: array, items: { type: string } }
+        employeeId: { type: string, format: uuid, nullable: true }
+        allowedModules: { type: array, items: { type: string } }
+        firstName: { type: string, nullable: true }
+        lastName: { type: string, nullable: true }
+        avatar: { type: string, nullable: true }
+        timeZone: { type: string, example: Asia/Karachi }
+        dateFormat: { type: string, example: dd/MM/yyyy }
+        isBreakGlassAccount: { type: boolean }
+
+    LoginResponse:
+      type: object
+      properties:
+        message: { type: string }
+        token: { type: string, description: JWT for Bearer auth (mobile) }
+        user:
+          type: object
+          properties:
+            id: { type: string }
+            email: { type: string }
+            role: { type: string }
+            effectiveRole: { type: string }
+            roles: { type: array, items: { type: string } }
+            employeeId: { type: string, nullable: true }
+            allowedModules: { type: array, items: { type: string } }
+
+    AttendanceToday:
+      type: object
+      nullable: true
+      properties:
+        id: { type: string }
+        employee_id: { type: string }
+        date: { type: string, format: date }
+        check_in_time: { type: string, format: date-time, nullable: true }
+        check_out_time: { type: string, format: date-time, nullable: true }
+        status: { type: string }
+        shift_start: { type: string }
+        shift_end: { type: string }
+        grace_minutes: { type: integer }
+        using_org_timesheet_policy: { type: boolean }
+
+    LeaveBalance:
+      type: object
+      properties:
+        id: { type: string }
+        employee_id: { type: string }
+        leave_type_id: { type: string }
+        balance: { type: string }
+        used: { type: string }
+        type_name: { type: string }
+        paid: { type: boolean }
+        color: { type: string }
+        policy_name: { type: string }
+
+    LeaveRequest:
+      type: object
+      properties:
+        id: { type: string }
+        leave_type_id: { type: string }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
+        day_type: { type: string, enum: [full, half, first_half, second_half] }
+        total_days: { type: string }
+        reason: { type: string, nullable: true }
+        status: { type: string, enum: [pending, approved, rejected, cancelled] }
+        applied_at: { type: string, format: date-time }
+        type_name: { type: string }
+        color: { type: string }
+        paid: { type: boolean }
+
+    LeaveSubmitBody:
+      type: object
+      required: [leaveTypeId, startDate, endDate]
+      properties:
+        leaveTypeId: { type: string, format: uuid }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        dayType: { type: string, default: full }
+        reason: { type: string }
+        attachmentUrl: { type: string, description: HTTPS URL or data:...;base64 }
+        notifyEmployeeIds: { type: array, items: { type: string } }
+
+    LeaveApprovalAction:
+      type: object
+      properties:
+        remarks: { type: string }
+        hrOverride: { type: boolean, default: false }
+
+    NotificationItem:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string }
+        module: { type: string }
+        title: { type: string }
+        message: { type: string }
+        link: { type: string, description: Web path — map to app screens }
+        createdAt: { type: string, format: date-time }
+        roleTarget: { type: string }
+
+    EmployeeDirectory:
+      type: object
+      properties:
+        id: { type: string }
+        employee_id: { type: string }
+        first_name: { type: string }
+        last_name: { type: string }
+        work_email: { type: string }
+        job_title: { type: string }
+        department: { type: string }
+        location: { type: string }
+        avatar: { type: string, nullable: true }
+        manager_id: { type: string, nullable: true }
+
+    SupportTicket:
+      type: object
+      properties:
+        id: { type: string }
+        ticket_number: { type: string }
+        title: { type: string }
+        description: { type: string }
+        priority: { type: string, enum: [low, medium, high, critical] }
+        status: { type: string, enum: [open, in_progress, resolved, closed] }
+        created_by_id: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    FeedPost:
+      type: object
+      properties:
+        id: { type: string }
+        authorEmployeeId: { type: string }
+        authorName: { type: string }
+        content: { type: string }
+        isPinned: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        attachments: { type: array, items: { type: object } }
+        reactions: { type: array, items: { type: object } }
+
+    Task:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        status: { type: string, enum: [todo, in_progress, review, done, cancelled] }
+        priority: { type: string }
+        due_date: { type: string, format: date, nullable: true }
+        assignee_id: { type: string, nullable: true }
+
+paths:
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login (email + password)
+      security: []
+      x-envelope: legacy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Success — store `token` for Bearer auth
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              example:
+                message: Login successful
+                token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                user:
+                  id: 550e8400-e29b-41d4-a716-446655440000
+                  email: user@company.com
+                  role: employee
+                  effectiveRole: employee
+                  roles: [employee]
+                  employeeId: 660e8400-e29b-41d4-a716-446655440001
+                  allowedModules: []
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorLegacy'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout
+      security:
+        - bearerAuth: []
+      x-envelope: legacy
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              example:
+                message: Logged out successfully
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current user profile + permissions context
+      security:
+        - bearerAuth: []
+      x-envelope: raw
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUser'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorLegacy'
+
+  /api/auth/microsoft/config:
+    get:
+      tags: [Auth]
+      summary: Microsoft SSO availability (native flow not implemented)
+      security: []
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                enabled: true
+                tenantId: your-tenant-id
+
+  /api/attendance/check-in:
+    post:
+      tags: [Attendance]
+      summary: Check in for today (policy timezone)
+      security:
+        - bearerAuth: []
+      x-envelope: ApiResponse
+      description: Requires `employeeId` on user account.
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '400':
+          description: No employee linked or validation (e.g. outside window, on full-day leave)
+        '409':
+          description: Already checked in
+
+  /api/attendance/check-out:
+    post:
+      tags: [Attendance]
+      summary: Check out for today
+      x-envelope: ApiResponse
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '409':
+          description: Already checked out
+
+  /api/attendance/today:
+    get:
+      tags: [Attendance]
+      summary: Today's attendance card
+      x-envelope: raw
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceToday'
+
+  /api/attendance/employee/{employeeId}:
+    get:
+      tags: [Attendance]
+      summary: Attendance history for employee
+      x-envelope: raw
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttendanceToday'
+        '403':
+          description: Employees may only access own id
+
+  /api/attendance/timesheet-policy:
+    get:
+      tags: [Attendance]
+      summary: Org timesheet policy
+      x-envelope: ApiResponse
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+
+  /api/leave/balances/{employeeId}:
+    get:
+      tags: [Leave]
+      summary: Leave balances for employee
+      x-envelope: raw
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LeaveBalance'
+
+  /api/leave/my-requests:
+    get:
+      tags: [Leave]
+      summary: Current user's leave requests
+      x-envelope: raw
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 200 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LeaveRequest'
+
+  /api/leave/types-for-employee/{employeeId}:
+    get:
+      tags: [Leave]
+      summary: Leave types available to apply
+      x-envelope: raw
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /api/leave/request:
+    post:
+      tags: [Leave]
+      summary: Submit leave request
+      x-envelope: raw
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeaveSubmitBody'
+      responses:
+        '201':
+          description: Created request (may include approval steps)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /api/leave/request/{requestId}/cancel:
+    post:
+      tags: [Leave]
+      summary: Cancel own pending request
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/leave/pending-approvals:
+    get:
+      tags: [Leave]
+      summary: Approvals queue (manager / HR)
+      x-envelope: raw
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string, description: approval row id }
+                    leave_request_id: { type: string }
+                    first_name: { type: string }
+                    last_name: { type: string }
+                    type_name: { type: string }
+                    start_date: { type: string }
+                    end_date: { type: string }
+                    total_days: { type: string }
+                    approver_role: { type: string }
+
+  /api/leave/approve/{approvalId}:
+    post:
+      tags: [Leave]
+      summary: Approve leave step
+      parameters:
+        - name: approvalId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeaveApprovalAction'
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                success: true
+                fullyApproved: true
+
+  /api/leave/reject/{approvalId}:
+    post:
+      tags: [Leave]
+      summary: Reject leave step
+      parameters:
+        - name: approvalId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeaveApprovalAction'
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                success: true
+
+  /api/leave/request/{requestId}:
+    get:
+      tags: [Leave]
+      summary: Leave request detail
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/leave/calendar:
+    get:
+      tags: [Leave]
+      summary: Approved leave calendar
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: department
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /api/leave/stats:
+    get:
+      tags: [Leave]
+      summary: Leave stats for dashboard widgets
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Role-aware dashboard payload
+      x-envelope: raw
+      description: |
+        Shape varies by `effectiveRole`: employee, manager, hr, admin.
+        Includes attendance summary, leave balances, pendingApprovals (if approver), activityFeed.
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+              examples:
+                employee:
+                  value:
+                    role: employee
+                    employee: { id: uuid, first_name: Jane, last_name: Doe }
+                    attendance:
+                      checkedIn: true
+                      checkedOut: false
+                      checkInTime: '2026-05-21T08:00:00.000Z'
+                    leaveBalances: []
+                    pendingLeaveRequests: []
+                    activityFeed: []
+                    birthdaysNext7: []
+                    pendingApprovals: []
+
+  /api/notifications:
+    get:
+      tags: [Notifications]
+      summary: Computed notification list
+      x-envelope: raw
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationItem'
+                  role: { type: string }
+
+  /api/notifications/stream:
+    get:
+      tags: [Notifications]
+      summary: SSE refresh stream (optional; prefer polling on mobile)
+      description: text/event-stream — events `connected`, `heartbeat`, `refresh`
+      responses:
+        '200':
+          description: Server-Sent Events
+
+  /api/employees:
+    get:
+      tags: [Employees]
+      summary: Employee list (org chart / directory)
+      x-envelope: raw
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer }
+        - name: offset
+          in: query
+          schema: { type: integer }
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: department
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /api/employees/{employeeId}:
+    get:
+      tags: [Employees]
+      summary: Employee profile (full if self/HR; directory fields otherwise)
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    description: Full profile
+                  - $ref: '#/components/schemas/EmployeeDirectory'
+    patch:
+      tags: [Employees]
+      summary: Update employee (admin / hr / limited_hr only)
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                message: Employee updated successfully
+                employee: {}
+
+  /api/employees/{employeeId}/avatar:
+    get:
+      tags: [Employees]
+      summary: Avatar image bytes
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: image/jpeg or image/png
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: No avatar
+
+  /api/employees/{employeeId}/change-requests:
+    post:
+      tags: [ChangeRequests]
+      summary: Submit profile change for HR approval (self-service edit)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fieldName, newValue]
+              properties:
+                fieldName: { type: string }
+                newValue: { type: string }
+                category: { type: string }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+
+  /api/change-requests:
+    get:
+      tags: [ChangeRequests]
+      summary: List change requests
+      x-envelope: ApiResponse
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, approved, rejected] }
+        - name: limit
+          in: query
+          schema: { type: integer, maximum: 500 }
+        - name: offset
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+
+  /api/feed:
+    get:
+      tags: [Feed]
+      summary: Company feed posts
+      x-envelope: ApiResponse
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, maximum: 50 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          posts:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/FeedPost'
+                          total: { type: integer }
+                          page: { type: integer }
+                          limit: { type: integer }
+
+  /api/feed/{postId}/reactions:
+    post:
+      tags: [Feed]
+      summary: Toggle reaction on post
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [emoji]
+              properties:
+                emoji: { type: string, maxLength: 10 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+
+  /api/assets/my-tickets:
+    get:
+      tags: [ITSupport]
+      summary: Current user's support tickets
+      x-envelope: raw
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SupportTicket'
+
+  /api/assets/my-systems:
+    get:
+      tags: [ITSupport]
+      summary: Assigned IT assets for ticket context
+      x-envelope: raw
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /api/assets/tickets:
+    post:
+      tags: [ITSupport]
+      summary: Create support ticket
+      x-envelope: raw
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description]
+              properties:
+                title: { type: string }
+                description: { type: string }
+                priority: { type: string, enum: [low, medium, high, critical] }
+                assetId: { type: string }
+                assetName: { type: string }
+                attachmentUrl: { type: string }
+                attachmentName: { type: string }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportTicket'
+
+  /api/assets/tickets/{ticketId}/comments:
+    get:
+      tags: [ITSupport]
+      summary: Ticket comments
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+    post:
+      tags: [ITSupport]
+      summary: Add ticket comment
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/departments/my-teams:
+    get:
+      tags: [Teams]
+      summary: My department teammates (or org overview for admin/hr)
+      x-envelope: ApiResponse
+      parameters:
+        - name: allOrg
+          in: query
+          schema: { type: boolean }
+          description: admin/hr only — department headcounts
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+              example:
+                success: true
+                data:
+                  scope: mine
+                  yourDepartmentName: Engineering
+                  reportingManagerName: John Manager
+                  teammates:
+                    - id: uuid
+                      employeeId: EMP002
+                      firstName: Jane
+                      lastName: Doe
+                      isYou: false
+
+  /api/tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks visible to user
+      x-envelope: ApiResponse
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, maximum: 500 }
+        - name: offset
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+
+  /api/tasks/{taskId}:
+    get:
+      tags: [Tasks]
+      summary: Task detail
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+    patch:
+      tags: [Tasks]
+      summary: Update task (set status done to complete)
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [done] }
+                progress: { type: integer, minimum: 0, maximum: 100 }
+                title: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+
+  /api/tasks/stats:
+    get:
+      tags: [Tasks]
+      summary: Task counts by status
+      x-envelope: ApiResponse
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+
+# Planned — not implemented
+x-planned:
+  payslips:
+    description: No backend; web UI uses local state only
+  pushNotifications:
+    endpoints:
+      - POST /api/notifications/register-device
+      - DELETE /api/notifications/register-device
+  authRefresh:
+    endpoint: POST /api/auth/refresh
+  microsoftSsoMobile:
+    flow: OAuth PKCE with custom URL scheme

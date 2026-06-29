@@ -1,0 +1,42 @@
+# Dev image: full deps + LibreOffice (same as prod) for local Docker with bind-mounted source.
+# Runtime: `docker compose -f docker-compose.local.yml up` mounts repo + a named node_modules volume.
+
+FROM node:22-alpine
+WORKDIR /app
+
+ENV HOME=/tmp \
+    NODE_ENV=development
+
+# Match production: Carlito/Croscore + Liberation + aliases so LO PDFs align with Word.
+RUN apk add --no-cache \
+    libreoffice \
+    openjdk11-jre \
+    fontconfig \
+    ttf-dejavu \
+    ttf-liberation \
+    font-noto \
+    font-carlito \
+    font-croscore \
+  && printf '%s\n' \
+      '<?xml version="1.0"?>' \
+      '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">' \
+      '<fontconfig>' \
+      '  <alias><family>Calibri</family><prefer><family>Carlito</family></prefer></alias>' \
+      '  <alias><family>Calibri Light</family><prefer><family>Carlito</family></prefer></alias>' \
+      '  <alias><family>Arial</family><prefer><family>Arimo</family></prefer></alias>' \
+      '  <alias><family>Times New Roman</family><prefer><family>Tinos</family></prefer></alias>' \
+      '  <alias><family>Cambria</family><prefer><family>Caladea</family></prefer></alias>' \
+      '  <alias><family>Cambria Math</family><prefer><family>Caladea</family></prefer></alias>' \
+      '  <alias><family>Segoe UI</family><prefer><family>Liberation Sans</family></prefer></alias>' \
+      '  <alias><family>Georgia</family><prefer><family>Liberation Serif</family></prefer></alias>' \
+      '  <alias><family>Verdana</family><prefer><family>Liberation Sans</family></prefer></alias>' \
+      '</fontconfig>' \
+      > /etc/fonts/conf.d/30-word-fonts-to-croscore.conf \
+  && fc-cache -f
+
+COPY package.json package-lock.json* ./
+RUN npm install --ignore-scripts && npm cache clean --force
+
+EXPOSE 5000
+
+CMD ["npm", "run", "dev"]
