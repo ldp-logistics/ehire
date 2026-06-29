@@ -305,7 +305,7 @@ export class NotificationService {
     }
 
     // ── HR/Admin: aggregated module alerts ───────────────────────────────────
-    if (role === "hr" || role === "admin") {
+    if (role === "hr" || role === "limited_hr") {
       const labels = [
         "getPendingChangeCount",
         "getOnboardingInProgress",

@@ -1524,7 +1524,7 @@ export const EMAIL_EVENT_CATALOG: EmailEventDef[] = [
     eventKey: "general.compensation.salary_updated",
     tab: "general",
     label: "Salary Updated",
-    description: "Sent to the employee and HR when a salary record is created or updated.",
+    description: "Sent to HR when a salary record is created or updated.",
     defaultEnabled: true,
     defaultSubject: "Compensation Updated – {{employee_name}}",
     defaultBody: `<p>Hi {{recipient_name}},</p>
@@ -1549,13 +1549,13 @@ export const EMAIL_EVENT_CATALOG: EmailEventDef[] = [
 </p>
 
 <p style="color:#64748b;font-size:13px">Regards,<br/>{{company_name}} HR</p>`,
-    recipientNote: "The employee and HR",
+    recipientNote: "HR and Limited HR",
   },
   {
     eventKey: "general.compensation.bonus_added",
     tab: "general",
     label: "Bonus Added",
-    description: "Sent to the employee and HR when a bonus is added to a compensation record.",
+    description: "Sent to HR when a bonus is added to a compensation record.",
     defaultEnabled: true,
     defaultSubject: "Bonus Added – {{employee_name}}",
     defaultBody: `<p>Hi {{recipient_name}},</p>
@@ -1582,7 +1582,88 @@ export const EMAIL_EVENT_CATALOG: EmailEventDef[] = [
 </p>
 
 <p style="color:#64748b;font-size:13px">Regards,<br/>{{company_name}} HR</p>`,
-    recipientNote: "The employee and HR",
+    recipientNote: "HR and Limited HR",
+  },
+  {
+    eventKey: "general.employee.created",
+    tab: "general",
+    label: "Employee Created",
+    description: "Sent to HR when a new employee profile is created.",
+    defaultEnabled: true,
+    defaultSubject: "New Employee Added – {{employee_name}}",
+    defaultBody: `<p>Hi HR Team,</p>
+
+<p>A new employee profile has been created.</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse">
+  <tr>
+    <td style="padding:20px;background:#eff6ff;border-left:4px solid #2563eb;border-radius:6px">
+      <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#1e40af">Employee Created</p>
+      <table cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b;width:110px">Employee</td><td style="padding:3px 0 3px 8px;font-size:14px;font-weight:600;color:#1e293b">{{employee_name}}</td></tr>
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b">Code</td><td style="padding:3px 0 3px 8px;font-size:14px;color:#1e293b">{{employee_code}}</td></tr>
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b">Department</td><td style="padding:3px 0 3px 8px;font-size:14px;color:#1e293b">{{department}}</td></tr>
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b">Work Email</td><td style="padding:3px 0 3px 8px;font-size:14px;color:#1e293b">{{work_email}}</td></tr>
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b">Created by</td><td style="padding:3px 0 3px 8px;font-size:14px;color:#1e293b">{{doer_name}}</td></tr>
+      </table>
+    </td>
+  </tr>
+</table>`,
+    recipientNote: "HR and Limited HR",
+  },
+  {
+    eventKey: "general.employee.updated",
+    tab: "general",
+    label: "Employee Updated",
+    description: "Sent to HR when an employee profile is updated.",
+    defaultEnabled: true,
+    defaultSubject: "Employee Updated – {{employee_name}}",
+    defaultBody: `<p>Hi HR Team,</p>
+
+<p>An employee profile has been updated.</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse">
+  <tr>
+    <td style="padding:20px;background:#f8fafc;border-left:4px solid #475569;border-radius:6px">
+      <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#334155">Employee Updated</p>
+      <table cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b;width:110px">Employee</td><td style="padding:3px 0 3px 8px;font-size:14px;font-weight:600;color:#1e293b">{{employee_name}}</td></tr>
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b">Code</td><td style="padding:3px 0 3px 8px;font-size:14px;color:#1e293b">{{employee_code}}</td></tr>
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b">Department</td><td style="padding:3px 0 3px 8px;font-size:14px;color:#1e293b">{{department}}</td></tr>
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b">Changed fields</td><td style="padding:3px 0 3px 8px;font-size:14px;color:#1e293b">{{changed_fields}}</td></tr>
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b">Updated by</td><td style="padding:3px 0 3px 8px;font-size:14px;color:#1e293b">{{doer_name}}</td></tr>
+      </table>
+    </td>
+  </tr>
+</table>`,
+    recipientNote: "HR and Limited HR",
+  },
+  {
+    eventKey: "general.employee.deleted",
+    tab: "general",
+    label: "Employee Deleted",
+    description: "Sent to HR when an employee profile is deleted.",
+    defaultEnabled: true,
+    defaultSubject: "Employee Deleted – {{employee_name}}",
+    defaultBody: `<p>Hi HR Team,</p>
+
+<p>An employee profile has been deleted.</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse">
+  <tr>
+    <td style="padding:20px;background:#fef2f2;border-left:4px solid #dc2626;border-radius:6px">
+      <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#b91c1c">Employee Deleted</p>
+      <table cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b;width:110px">Employee</td><td style="padding:3px 0 3px 8px;font-size:14px;font-weight:600;color:#1e293b">{{employee_name}}</td></tr>
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b">Code</td><td style="padding:3px 0 3px 8px;font-size:14px;color:#1e293b">{{employee_code}}</td></tr>
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b">Department</td><td style="padding:3px 0 3px 8px;font-size:14px;color:#1e293b">{{department}}</td></tr>
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b">Work Email</td><td style="padding:3px 0 3px 8px;font-size:14px;color:#1e293b">{{work_email}}</td></tr>
+        <tr><td style="padding:3px 0;font-size:13px;color:#64748b">Deleted by</td><td style="padding:3px 0 3px 8px;font-size:14px;color:#1e293b">{{doer_name}}</td></tr>
+      </table>
+    </td>
+  </tr>
+</table>`,
+    recipientNote: "HR and Limited HR",
   },
   {
     eventKey: "general.change_request.submitted",

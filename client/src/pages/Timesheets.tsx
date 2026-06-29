@@ -210,31 +210,79 @@ function sourceBadge(source: string) {
 
 type ReportSortMode = "department_first" | "date_first";
 
+const REPORT_DEPARTMENT_SEQUENCE = [
+  "hr",
+  "compliance",
+  "customs",
+  "domestic operations",
+  "finance",
+  "information technology",
+  "sales",
+  "marketing",
+  "admin",
+] as const;
+
+function normalizedDepartmentBucket(department: string | null | undefined): (typeof REPORT_DEPARTMENT_SEQUENCE)[number] | "other" {
+  const d = (department ?? "").trim().toLowerCase();
+  if (d === "hr" || d === "human resources") return "hr";
+  if (d === "compliance" || d === "compliance and legal") return "compliance";
+  if (d === "customs" || d === "forwarding-customs" || d === "forwarding customs") return "customs";
+  if (d === "domestic operations" || d === "operations") return "domestic operations";
+  if (d === "finance") return "finance";
+  if (d === "it" || d === "information technology") return "information technology";
+  if (d === "sales") return "sales";
+  if (d === "marketing") return "marketing";
+  if (d === "sales & marketing" || d === "sales and marketing") return "sales";
+  if (d === "admin" || d === "administration") return "admin";
+  return "other";
+}
+
+function departmentOrderIndex(department: string | null | undefined): number {
+  const normalized = normalizedDepartmentBucket(department);
+  if (normalized === "other") return REPORT_DEPARTMENT_SEQUENCE.length;
+  const idx = REPORT_DEPARTMENT_SEQUENCE.indexOf(normalized as (typeof REPORT_DEPARTMENT_SEQUENCE)[number]);
+  return idx === -1 ? REPORT_DEPARTMENT_SEQUENCE.length : idx;
+}
+
 function compareAttendanceReportRows(a: AttendanceRecord, b: AttendanceRecord, mode: ReportSortMode): number {
-  const deptKey = (r: AttendanceRecord) => (r.department ?? "").trim().toLowerCase() || "\uffff";
+  const deptKey = (r: AttendanceRecord) => (r.department ?? "").trim().toLowerCase();
+  const deptOrder = (r: AttendanceRecord) => departmentOrderIndex(r.department);
   const dateKey = (r: AttendanceRecord) => workDateYmdOnly(r.date);
   const nameKey = (r: AttendanceRecord) => `${r.last_name ?? ""} ${r.first_name ?? ""}`.toLowerCase();
-  const hasIn = (r: AttendanceRecord) => (r.check_in_time ? 1 : 0);
-  const inTime = (r: AttendanceRecord) => (r.check_in_time ? new Date(r.check_in_time).getTime() : 0);
+  const empCodeNumber = (r: AttendanceRecord) => {
+    const raw = (r.emp_code ?? "").trim();
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+  };
+  const empCodeText = (r: AttendanceRecord) => (r.emp_code ?? "").trim().toLowerCase();
+  const inTime = (r: AttendanceRecord) => (r.check_in_time ? new Date(r.check_in_time).getTime() : Number.POSITIVE_INFINITY);
 
-  const cmpDept = deptKey(a).localeCompare(deptKey(b));
+  const cmpDeptOrder = deptOrder(a) - deptOrder(b);
+  const cmpDeptAlpha = deptKey(a).localeCompare(deptKey(b));
   const cmpDate = dateKey(a).localeCompare(dateKey(b));
-  const cmpHasIn = hasIn(b) - hasIn(a);
+  const cmpEmpCodeNum = empCodeNumber(a) - empCodeNumber(b);
+  const cmpEmpCodeText = empCodeText(a).localeCompare(empCodeText(b));
   const cmpName = nameKey(a).localeCompare(nameKey(b));
   const cmpInTime = inTime(a) - inTime(b);
 
   if (mode === "department_first") {
-    if (cmpDept !== 0) return cmpDept;
+    if (cmpDeptOrder !== 0) return cmpDeptOrder;
+    if (cmpDeptAlpha !== 0) return cmpDeptAlpha;
+    if (cmpEmpCodeNum !== 0) return cmpEmpCodeNum;
+    if (cmpEmpCodeText !== 0) return cmpEmpCodeText;
     if (cmpDate !== 0) return cmpDate;
-    if (cmpHasIn !== 0) return cmpHasIn;
+    if (cmpInTime !== 0) return cmpInTime;
     if (cmpName !== 0) return cmpName;
-    return cmpInTime;
+    return 0;
   }
   if (cmpDate !== 0) return cmpDate;
-  if (cmpDept !== 0) return cmpDept;
-  if (cmpHasIn !== 0) return cmpHasIn;
+  if (cmpDeptOrder !== 0) return cmpDeptOrder;
+  if (cmpDeptAlpha !== 0) return cmpDeptAlpha;
+  if (cmpEmpCodeNum !== 0) return cmpEmpCodeNum;
+  if (cmpEmpCodeText !== 0) return cmpEmpCodeText;
+  if (cmpInTime !== 0) return cmpInTime;
   if (cmpName !== 0) return cmpName;
-  return cmpInTime;
+  return 0;
 }
 
 // ==================== MAIN COMPONENT ====================
@@ -270,7 +318,7 @@ export default function Timesheets() {
   const [reportTo, setReportTo] = useState(() => initialReport.to);
   const [reportDept, setReportDept] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [reportSortMode, setReportSortMode] = useState<ReportSortMode>("department_first");
+  const [reportSortMode, setReportSortMode] = useState<ReportSortMode>("date_first");
   const [activePreset, setActivePreset] = useState<DatePreset>("today");
   const [showCustom, setShowCustom] = useState(false);
 
@@ -904,8 +952,8 @@ export default function Timesheets() {
                         <SelectValue placeholder="Sort order" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="department_first">Dept → date → checked-in first</SelectItem>
-                        <SelectItem value="date_first">Date → dept → checked-in first</SelectItem>
+                        <SelectItem value="department_first">Dept sequence → Emp ID → Date</SelectItem>
+                        <SelectItem value="date_first">Date → Dept sequence → Emp ID</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -928,13 +976,13 @@ export default function Timesheets() {
                     <TableRow className="bg-muted/50">
                       <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm shadow-[0_1px_0_0_hsl(var(--border))]">Emp ID</TableHead>
                       <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm shadow-[0_1px_0_0_hsl(var(--border))]">Name</TableHead>
-                      <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm shadow-[0_1px_0_0_hsl(var(--border))]">Date</TableHead>
                       <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm shadow-[0_1px_0_0_hsl(var(--border))]">Check In</TableHead>
-                      <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm shadow-[0_1px_0_0_hsl(var(--border))]">Check Out</TableHead>
+                      <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm shadow-[0_1px_0_0_hsl(var(--border))]">Status</TableHead>
                       <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm shadow-[0_1px_0_0_hsl(var(--border))]">Department</TableHead>
+                      <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm shadow-[0_1px_0_0_hsl(var(--border))]">Date</TableHead>
+                      <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm shadow-[0_1px_0_0_hsl(var(--border))]">Check Out</TableHead>
                       <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm text-right shadow-[0_1px_0_0_hsl(var(--border))]">Hours</TableHead>
                       <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm text-right shadow-[0_1px_0_0_hsl(var(--border))]">OT</TableHead>
-                      <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm shadow-[0_1px_0_0_hsl(var(--border))]">Status</TableHead>
                       <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm shadow-[0_1px_0_0_hsl(var(--border))]">Source</TableHead>
                       <TableHead className="sticky top-0 z-20 bg-muted/95 backdrop-blur-sm shadow-[0_1px_0_0_hsl(var(--border))]">Shift</TableHead>
                       <TableHead className="sticky top-0 z-20 w-[100px] bg-muted/95 text-right backdrop-blur-sm shadow-[0_1px_0_0_hsl(var(--border))]">Actions</TableHead>
@@ -949,13 +997,13 @@ export default function Timesheets() {
                       <TableRow key={r.id}>
                         <TableCell className="font-mono text-sm text-muted-foreground">{r.emp_code || "—"}</TableCell>
                         <TableCell className="font-medium text-sm">{attendanceRecordName(r)}</TableCell>
-                        <TableCell className="font-medium text-sm">{formatDate(r.date, attendanceDisplayTz, user?.dateFormat ?? null)}</TableCell>
                         <TableCell className="font-mono text-sm">{formatTime(r.check_in_time, attendanceDisplayTz)}</TableCell>
-                        <TableCell className="font-mono text-sm">{formatTime(r.check_out_time, attendanceDisplayTz)}</TableCell>
+                        <TableCell>{statusBadge(r.status)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{r.department || "—"}</TableCell>
+                        <TableCell className="font-medium text-sm">{formatDate(r.date, attendanceDisplayTz, user?.dateFormat ?? null)}</TableCell>
+                        <TableCell className="font-mono text-sm">{formatTime(r.check_out_time, attendanceDisplayTz)}</TableCell>
                         <TableCell className="text-right font-mono">{formatHours(r.hours_worked)}</TableCell>
                         <TableCell className="text-right font-mono text-purple-600">{r.overtime && r.overtime > 0 ? `${r.overtime.toFixed(1)}h` : "—"}</TableCell>
-                        <TableCell>{statusBadge(r.status)}</TableCell>
                         <TableCell>{sourceBadge(r.source)}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{r.shift_name || "—"}</TableCell>
                         <TableCell className="text-right">

@@ -3,7 +3,8 @@ import { OnboardingTemplateRepository } from "./templates/OnboardingTemplateRepo
 import {
   dedupeRecipientsByEmail,
   getEmployeeNotificationRecipient,
-  getEmailsByRoleForRegion,
+  getEmailsByRole,
+  getEmailsByRolesForRegion,
   notifyEmail,
   resolveActorDisplayForEmail,
 } from "../../lib/emailNotifications.js";
@@ -68,6 +69,21 @@ export class OnboardingService {
   private readonly assetService = new AssetService();
   private readonly authRepo = new AuthRepository();
   private readonly employeeSvc = new EmployeeService();
+
+  private async hrRecipientsForEmployee(employeeId: string) {
+    const empRegion = await getEmployeeRegion(employeeId);
+    const scoped = empRegion
+      ? await getEmailsByRolesForRegion(["hr", "limited_hr"], empRegion)
+      : [];
+    const fallback =
+      scoped.length > 0
+        ? []
+        : [
+            ...(await getEmailsByRole("hr")),
+            ...(await getEmailsByRole("limited_hr")),
+          ];
+    return dedupeRecipientsByEmail([...scoped, ...fallback]);
+  }
 
   async listAll(actor?: OnboardingActor): Promise<OnboardingResponseDTO[]> {
     const regions = actor ? effectiveRegionsFor(actor, actor.requestedRegion) : null;
@@ -197,18 +213,15 @@ export class OnboardingService {
     );
     (async () => {
       try {
-        const empRec = await getEmployeeNotificationRecipient(dto.employeeId);
-        const empRegion = await getEmployeeRegion(dto.employeeId);
-        const hrs = await getEmailsByRoleForRegion("hr", empRegion);
-        const empName = empRec?.name || "the new employee";
+        const hrs = await this.hrRecipientsForEmployee(dto.employeeId);
+        const empName = "the new employee";
         const ctx = {
           employee_name: empName,
           department: emp.department || "—",
           employee_id: dto.employeeId,
           onboarding_record_id: record.id,
         };
-        const allRecipients = dedupeRecipientsByEmail([...(empRec ? [empRec] : []), ...hrs]);
-        if (allRecipients.length) await notifyEmail("onboarding.initiated", ctx, allRecipients);
+        if (hrs.length) await notifyEmail("onboarding.initiated", ctx, hrs);
       } catch {
         /* ignore */
       }
@@ -239,18 +252,15 @@ export class OnboardingService {
         try {
           const eid = existing.employee_id;
           if (!eid) return;
-          const empRec = await getEmployeeNotificationRecipient(eid);
-          const empRegion = await getEmployeeRegion(eid);
-          const hrs = await getEmailsByRoleForRegion("hr", empRegion);
-          const empName = empRec?.name || "Employee";
+          const hrs = await this.hrRecipientsForEmployee(eid);
+          const empName = `${existing.first_name ?? ""} ${existing.last_name ?? ""}`.trim() || "Employee";
           const ctx = {
             employee_name: empName,
             department: (existing as { department?: string | null }).department || "—",
             employee_id: eid,
             onboarding_record_id: existing.id,
           };
-          const all = dedupeRecipientsByEmail([...(empRec ? [empRec] : []), ...hrs]);
-          if (all.length) await notifyEmail("onboarding.completed", ctx, all);
+          if (hrs.length) await notifyEmail("onboarding.completed", ctx, hrs);
           await this.employeeSvc.sendWelcomeInvitation(eid).catch(() => {});
         } catch {
           /* ignore */

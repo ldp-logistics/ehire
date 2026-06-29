@@ -87,6 +87,10 @@ const THEME = {
   ink: "#141518",
 } as const;
 
+function hasPlaceholderToken(value: string, token: string): boolean {
+  return value.includes(token);
+}
+
 // Placeholder image per department (optional; could use real URLs later)
 function getJobCardImage(department: string): string {
   const dept = (department || "").toLowerCase();
@@ -356,10 +360,10 @@ const EMPTY_FORM = {
 
 // Region config — maps region_code values to display labels + flags
 const REGIONS = [
-  { code: "all", label: "All Regions" },
-  { code: "PK", label: "Pakistan" },
-  { code: "IN", label: "India" },
-  { code: "US", label: "United States" },
+  { code: "all", label: "All Regions", flag: "🌐" },
+  { code: "PK", label: "Pakistan", flag: "🇵🇰" },
+  { code: "IN", label: "India", flag: "🇮🇳" },
+  { code: "US", label: "United States", flag: "🇺🇸" },
 ] as const;
 
 const JOBS_PER_PAGE = 9;
@@ -616,7 +620,7 @@ export default function CareerSite() {
       <header style={{ position: "sticky", top: 0, zIndex: 60, background: "rgba(248,248,246,0.92)", backdropFilter: "blur(10px)", borderBottom: "1px solid #E2E1DE" }}>
         <div className="max-w-7xl mx-auto px-6" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: "68px" }}>
           <a href="#hero" style={{ display: "flex", alignItems: "baseline", gap: "7px", textDecoration: "none", lineHeight: 1 }}>
-            <img src={CAREERS_LOGO !== "PASTE_YOUR_BASE64_HERE" ? CAREERS_LOGO : LOGO_DARK} alt="LDP Logistics" style={{ height: "58px", width: "auto", maxWidth: "220px", objectFit: "contain", display: "block" }} />
+            <img src={!hasPlaceholderToken(CAREERS_LOGO, "PASTE_YOUR_BASE64_HERE") ? CAREERS_LOGO : LOGO_DARK} alt="LDP Logistics" style={{ height: "58px", width: "auto", maxWidth: "220px", objectFit: "contain", display: "block" }} />
           </a>
           <nav className="hidden md:flex items-center" style={{ gap: "4px", listStyle: "none" }}>
             {[
@@ -1027,12 +1031,12 @@ export default function CareerSite() {
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "30px", marginBottom: "36px" }} className="grid-footer-cols">
             {/* Col 1: logo + description + socials */}
             <div>
-              <img src={CAREERS_LOGO_FOOTER !== "PASTE_YOUR_FOOTER_BASE64_HERE" ? CAREERS_LOGO_FOOTER : LOGO_LIGHT} alt="LDP Logistics" style={{ height: "34px", width: "auto", display: "block", marginBottom: "10px" }} />
+              <img src={!hasPlaceholderToken(CAREERS_LOGO_FOOTER, "PASTE_YOUR_FOOTER_BASE64_HERE") ? CAREERS_LOGO_FOOTER : LOGO_LIGHT} alt="LDP Logistics" style={{ height: "34px", width: "auto", display: "block", marginBottom: "10px" }} />
               <p style={{ fontSize: "13.5px", lineHeight: 1.6, maxWidth: "300px", marginTop: "10px", color: "#9C9EA2" }}>
                 Freight brokerage built around the gate. Full truckload, LTL, drayage, intermodal, and specialized capacity across the lower 48 — every carrier through a documented six-point screen.
               </p>
               {/* TIA Member badge */}
-              {CAREERS_TIA_BADGE !== "PASTE_YOUR_TIA_BADGE_BASE64_HERE" && (
+              {!hasPlaceholderToken(CAREERS_TIA_BADGE, "PASTE_YOUR_TIA_BADGE_BASE64_HERE") && (
                 <img
                   src={CAREERS_TIA_BADGE}
                   alt="Transportation Intermediaries Association (TIA) Member 2026"

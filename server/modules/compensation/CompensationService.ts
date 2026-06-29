@@ -1,6 +1,13 @@
 import { CompensationRepository } from "./CompensationRepository.js";
 import { NotFoundError, ValidationError } from "../../core/types/index.js";
-import { getEmailsByRoleForRegion, getEmployeeEmail, resolveActorDisplayForEmail, dedupeRecipientsByEmail, notifyEmail } from "../../lib/emailNotifications.js";
+import {
+  getEmployeeEmail,
+  getEmailsByRole,
+  getEmailsByRolesForRegion,
+  resolveActorDisplayForEmail,
+  dedupeRecipientsByEmail,
+  notifyEmail,
+} from "../../lib/emailNotifications.js";
 import { getEmployeeRegion } from "../../lib/regionAccess.js";
 import { hasBreakdownInput, normalizeSalaryPayload, normalizeAdditionalAllowances } from "../../../shared/compensationSalary.js";
 
@@ -69,13 +76,22 @@ async function sendCompensationNotify(
 ) {
   const empRec = await getEmployeeEmail(employeeId);
   const empRegion = await getEmployeeRegion(employeeId);
-  const hrs = await getEmailsByRoleForRegion("hr", empRegion);
+  const scopedHrs = empRegion
+    ? await getEmailsByRolesForRegion(["hr", "limited_hr"], empRegion)
+    : [];
+  const fallbackHrs =
+    scopedHrs.length > 0
+      ? []
+      : [
+          ...(await getEmailsByRole("hr")),
+          ...(await getEmailsByRole("limited_hr")),
+        ];
+  const hrs = dedupeRecipientsByEmail([...scopedHrs, ...fallbackHrs]);
   const ctx = await compensationNotifyContext(employeeId, updatedBy, {
     employee_name: empRec?.name || "Employee",
     ...fields,
   });
-  const all = dedupeRecipientsByEmail([...(empRec ? [empRec] : []), ...hrs]);
-  if (all.length) await notifyEmail(eventKey, ctx, all);
+  if (hrs.length) await notifyEmail(eventKey, ctx, hrs);
 }
 
 export class CompensationService {

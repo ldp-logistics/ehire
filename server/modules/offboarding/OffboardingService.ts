@@ -6,7 +6,8 @@ import { AssetService } from "../assets/AssetService.js";
 import {
   dedupeRecipientsByEmail,
   getEmployeeNotificationRecipient,
-  getEmailsByRoleForRegion,
+  getEmailsByRole,
+  getEmailsByRolesForRegion,
   notifyEmail,
   resolveActorDisplayForEmail,
 } from "../../lib/emailNotifications.js";
@@ -38,6 +39,21 @@ export type OffboardingRegionCtx = {
 
 export class OffboardingService {
   private readonly repo = new OffboardingRepository();
+
+  private async hrRecipientsForEmployee(employeeId: string) {
+    const empRegion = await getEmployeeRegion(employeeId);
+    const scoped = empRegion
+      ? await getEmailsByRolesForRegion(["hr", "limited_hr"], empRegion)
+      : [];
+    const fallback =
+      scoped.length > 0
+        ? []
+        : [
+            ...(await getEmailsByRole("hr")),
+            ...(await getEmailsByRole("limited_hr")),
+          ];
+    return dedupeRecipientsByEmail([...scoped, ...fallback]);
+  }
 
   async list(status?: string, region?: { regionCode?: string | null; isRegionalSuperAdmin?: boolean; requestedRegion?: string | null }) {
     const regions = region ? effectiveRegionsFor(region, region.requestedRegion) : null;
@@ -133,8 +149,8 @@ export class OffboardingService {
     await this.repo.updateEmployeeExitInfo(employeeId, offboardingType, reason, exitDate, resignationDateResolved);
     await this.repo.generateDefaultTasks(record.id, employeeId);
     await this.repo.audit(record.id, "initiate", initiatedBy, `Offboarding initiated. Type: ${offboardingType}. Notice: ${noticeRequired ? noticePeriodDays + " days" : "None"}. Resignation date: ${resignationDateResolved ?? "—"}. Exit date: ${exitDate}`);
-    // Email: notify employee and HR
-    (async()=>{try{const empRec=await getEmployeeNotificationRecipient(employeeId);const empRegion=await getEmployeeRegion(employeeId);const hrs=await getEmailsByRoleForRegion("hr",empRegion);const doerName=await resolveActorDisplayForEmail(initiatedBy);const ctx={employee_name:empRec?.name||"Employee",employee_id:employeeId,offboarding_record_id:record.id,exit_date:exitDate,resignation_date:dateOnlyForDisplay(resignationDateResolved),offboarding_type:humanizeOffboardingTypeLabel(offboardingType),doer_name:doerName};const all=dedupeRecipientsByEmail([...(empRec?[empRec]:[]),...hrs]);if(all.length)await notifyEmail("offboarding.initiated",ctx,all);}catch{}})();
+    // Email: HR-only notification for offboarding initiation
+    (async()=>{try{const hrs=await this.hrRecipientsForEmployee(employeeId);const doerName=await resolveActorDisplayForEmail(initiatedBy);const empName=`${emp.first_name ?? ""} ${emp.last_name ?? ""}`.trim()||"Employee";const ctx={employee_name:empName,employee_id:employeeId,offboarding_record_id:record.id,exit_date:exitDate,resignation_date:dateOnlyForDisplay(resignationDateResolved),offboarding_type:humanizeOffboardingTypeLabel(offboardingType),doer_name:doerName};if(hrs.length)await notifyEmail("offboarding.initiated",ctx,hrs);}catch{}})();
     // Do not auto-complete on initiate. HR must run through checklist (tasks, asset return, etc.)
     // and explicitly click "Complete Offboarding" when exit date has been reached.
     return record;
@@ -146,8 +162,8 @@ export class OffboardingService {
     const statusLabel = (offboardingType || "").toLowerCase() === "termination" ? "terminated" : "offboarded";
     await this.repo.audit(offboardingId, "complete", performedBy, `Offboarding completed. Employee status set to ${statusLabel}. Integration hooks fired.`);
     await onOffboardingComplete(emp, offboardingId);
-    // Email: notify HR and IT that offboarding is done
-    (async()=>{try{const empRec=await getEmployeeNotificationRecipient(employeeId);const empRegion=await getEmployeeRegion(employeeId);const hrs=await getEmailsByRoleForRegion("hr",empRegion);const its=await getEmailsByRoleForRegion("it",empRegion);const exitDate=emp.exit_date?String(emp.exit_date).slice(0,10):"—";const ctx={employee_name:empRec?.name||"Employee",employee_id:employeeId,offboarding_record_id:offboardingId,exit_date:exitDate};const all=dedupeRecipientsByEmail([...(empRec?[empRec]:[]),...hrs,...its]);if(all.length)await notifyEmail("offboarding.completed",ctx,all);}catch{}})();
+    // Email: HR-only notification for offboarding completion
+    (async()=>{try{const hrs=await this.hrRecipientsForEmployee(employeeId);const exitDate=emp.exit_date?String(emp.exit_date).slice(0,10):"—";const empName=`${emp.first_name ?? ""} ${emp.last_name ?? ""}`.trim()||"Employee";const ctx={employee_name:empName,employee_id:employeeId,offboarding_record_id:offboardingId,exit_date:exitDate};if(hrs.length)await notifyEmail("offboarding.completed",ctx,hrs);}catch{}})();
   }
 
   async updateExitDate(id: string, exitDate: string, reason: string|null, performedBy: string) {

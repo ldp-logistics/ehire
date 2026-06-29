@@ -19,9 +19,14 @@ import {
   recordEmployeeProfileChange,
 } from "../../lib/employeeProfileChanges.js";
 import {
+  dedupeRecipientsByEmail,
+  getEmailsByRole,
+  getEmailsByRolesForRegion,
   notifyEmail,
+  resolveActorDisplayForEmail,
   resolvePublicAppUrlForTemplates,
 } from "../../lib/emailNotifications.js";
+import { getEmployeeRegion } from "../../lib/regionAccess.js";
 
 const TENTATIVE_DOC_LABELS: Record<string, string> = { cnic_front:"CNIC Front",cnic_back:"CNIC Back",professional_photo:"Professional Profile Photograph",passport:"Passport",drivers_license:"Driver's License",degree_transcript:"Degree / Transcript",experience_certificate:"Experience Certificate",salary_slip:"Latest Salary Slip",resignation_acceptance:"Resignation Acceptance Letter",internship_certificate:"Internship Certificate" };
 
@@ -57,6 +62,29 @@ const DOCUMENT_SECTION_TYPES = ["id_document","education","offer_letter","nda","
 export class EmployeeService {
   private readonly repo = new EmployeeRepository();
   private readonly authRepo = new AuthRepository();
+
+  private async notifyHrOnlyForEmployeeModule(
+    eventKey: "general.employee.created" | "general.employee.updated" | "general.employee.deleted",
+    employeeId: string,
+    actorUserId: string,
+    fields: Record<string, string>,
+  ) {
+    const region = await getEmployeeRegion(employeeId);
+    const scoped = region
+      ? await getEmailsByRolesForRegion(["hr", "limited_hr"], region)
+      : [];
+    const fallback =
+      scoped.length > 0
+        ? []
+        : [
+            ...(await getEmailsByRole("hr")),
+            ...(await getEmailsByRole("limited_hr")),
+          ];
+    const recipients = dedupeRecipientsByEmail([...scoped, ...fallback]);
+    if (!recipients.length) return;
+    const doerName = await resolveActorDisplayForEmail(actorUserId);
+    await notifyEmail(eventKey, { employee_id: employeeId, doer_name: doerName, ...fields }, recipients);
+  }
 
   async list(query: { limit?: string; offset?: string; q?: string; department?: string; status?: string; includeInactive?: string; risk?: string; orgChart?: string }, user?: UserPayload) {
     const limit = Math.min(parseInt(query.limit||"500")||500, 2000);
@@ -178,6 +206,16 @@ export class EmployeeService {
         userAgent: audit.userAgent,
       });
     }
+    (async () => {
+      try {
+        await this.notifyHrOnlyForEmployeeModule("general.employee.created", emp.id, audit?.userId || "system", {
+          employee_name: `${emp.first_name} ${emp.last_name}`.trim() || "Employee",
+          employee_code: String(emp.employee_id ?? "—"),
+          department: String(emp.department ?? "—"),
+          work_email: String(emp.work_email ?? "—"),
+        });
+      } catch {}
+    })();
     return emp;
   }
 
@@ -249,6 +287,18 @@ export class EmployeeService {
         userAgent: audit.userAgent,
       });
     }
+    if (changedFieldKeys.length > 0) {
+      (async () => {
+        try {
+          await this.notifyHrOnlyForEmployeeModule("general.employee.updated", id, updatedBy || "system", {
+            employee_name: `${emp.first_name} ${emp.last_name}`.trim() || "Employee",
+            employee_code: String(emp.employee_id ?? "—"),
+            department: String(emp.department ?? "—"),
+            changed_fields: changedFieldKeys.join(", "),
+          });
+        } catch {}
+      })();
+    }
     return emp;
   }
 
@@ -279,6 +329,16 @@ export class EmployeeService {
         userAgent: audit.userAgent,
       });
     }
+    (async () => {
+      try {
+        await this.notifyHrOnlyForEmployeeModule("general.employee.deleted", id, audit?.userId || "system", {
+          employee_name: `${existing.first_name} ${existing.last_name}`.trim() || "Employee",
+          employee_code: String(existing.employee_id ?? "—"),
+          department: String(existing.department ?? "—"),
+          work_email: String(existing.work_email ?? "—"),
+        });
+      } catch {}
+    })();
   }
 
   async getDepartments() { return this.repo.getDepartments(); }
