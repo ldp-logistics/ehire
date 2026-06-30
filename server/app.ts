@@ -17,6 +17,59 @@ export function log(message: string, source = "express") {
 
 export const app = express();
 
+type CorsRule =
+  | { kind: "exact"; origin: string }
+  | { kind: "wildcard"; protocol: string; baseHost: string; port: string };
+
+function parseAllowedCorsOrigins(raw: string | undefined): CorsRule[] {
+  const values = (raw ?? "").split(",").map((v) => v.trim()).filter(Boolean);
+  const rules: CorsRule[] = [];
+
+  for (const value of values) {
+    if (value.includes("*")) {
+      // Expected wildcard format: https://*.example.com[:port]
+      const m = value.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\/\*\.([^/:]+)(:\d+)?$/);
+      if (!m) continue;
+      rules.push({
+        kind: "wildcard",
+        protocol: m[1]!.toLowerCase(),
+        baseHost: m[2]!.toLowerCase(),
+        port: m[3] ?? "",
+      });
+      continue;
+    }
+    rules.push({ kind: "exact", origin: value });
+  }
+
+  return rules;
+}
+
+const allowedCorsOrigins = parseAllowedCorsOrigins(process.env.CORS_ALLOWED_ORIGINS);
+
+function isAllowedCorsOrigin(origin: string): boolean {
+  for (const rule of allowedCorsOrigins) {
+    if (rule.kind === "exact") {
+      if (rule.origin === origin) return true;
+      continue;
+    }
+
+    try {
+      const u = new URL(origin);
+      const protocol = u.protocol.replace(/:$/, "").toLowerCase();
+      const host = u.hostname.toLowerCase();
+      const port = u.port ? `:${u.port}` : "";
+      if (protocol !== rule.protocol) continue;
+      if (rule.port && port !== rule.port) continue;
+      // Must be a subdomain, not the bare domain itself.
+      if (host === rule.baseHost) continue;
+      if (host.endsWith(`.${rule.baseHost}`)) return true;
+    } catch {
+      continue;
+    }
+  }
+  return false;
+}
+
 // Behind Cloudflare Tunnel / nginx: they send X-Forwarded-For. express-rate-limit v7+ errors if
 // trust proxy is false. Set TRUST_PROXY=false only for raw local hits with no reverse proxy.
 if (process.env.TRUST_PROXY !== "false") {
@@ -31,6 +84,30 @@ declare module 'http' {
 
 // Cookie parser middleware (must be before routes)
 app.use(cookieParser());
+
+// CORS allowlist from env:
+// CORS_ALLOWED_ORIGINS=https://app.example.com,https://*.example.com,http://localhost:5173
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (!origin) return next();
+
+  if (isAllowedCorsOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+  }
+
+  if (req.method === "OPTIONS") {
+    if (isAllowedCorsOrigin(origin)) {
+      return res.status(204).end();
+    }
+    return res.status(403).json({ error: "CORS origin not allowed" });
+  }
+
+  return next();
+});
 
 app.use(express.json({
   limit: '10mb', // Increased limit for avatar uploads
