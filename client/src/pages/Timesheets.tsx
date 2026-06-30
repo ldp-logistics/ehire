@@ -148,9 +148,9 @@ function policyTodayRange(timezone: string): { from: string; to: string } {
 
 // ==================== DATE PRESETS ====================
 
-type DatePreset = "today" | "yesterday" | "this_week" | "last_week" | "this_month" | "custom";
+type DatePreset = "today" | "yesterday" | "this_week" | "last_week" | "this_month" | "time" | "custom";
 
-const DATE_PRESET_ORDER: DatePreset[] = ["today", "yesterday", "this_week", "last_week", "this_month"];
+const DATE_PRESET_ORDER: DatePreset[] = ["today", "yesterday", "this_week", "last_week", "this_month", "time"];
 
 const DATE_PRESET_LABELS: Record<DatePreset, string> = {
   today: "Today",
@@ -158,6 +158,7 @@ const DATE_PRESET_LABELS: Record<DatePreset, string> = {
   this_week: "This Week",
   last_week: "Last Week",
   this_month: "This Month",
+  time: "Time",
   custom: "Custom",
 };
 
@@ -208,7 +209,7 @@ function sourceBadge(source: string) {
   return <Badge variant="secondary" className="text-xs">{cfg[source] || source}</Badge>;
 }
 
-type ReportSortMode = "department_first" | "date_first";
+type ReportSortMode = "department_first" | "date_first" | "time_first";
 
 const REPORT_DEPARTMENT_SEQUENCE = [
   "hr",
@@ -265,6 +266,17 @@ function compareAttendanceReportRows(a: AttendanceRecord, b: AttendanceRecord, m
   const cmpName = nameKey(a).localeCompare(nameKey(b));
   const cmpInTime = inTime(a) - inTime(b);
 
+  if (mode === "time_first") {
+    if (cmpInTime !== 0) return cmpInTime;
+    if (cmpDeptOrder !== 0) return cmpDeptOrder;
+    if (cmpDeptAlpha !== 0) return cmpDeptAlpha;
+    if (cmpEmpCodeNum !== 0) return cmpEmpCodeNum;
+    if (cmpEmpCodeText !== 0) return cmpEmpCodeText;
+    if (cmpDate !== 0) return cmpDate;
+    if (cmpName !== 0) return cmpName;
+    return 0;
+  }
+
   if (mode === "department_first") {
     if (cmpDeptOrder !== 0) return cmpDeptOrder;
     if (cmpDeptAlpha !== 0) return cmpDeptAlpha;
@@ -318,7 +330,7 @@ export default function Timesheets() {
   const [reportTo, setReportTo] = useState(() => initialReport.to);
   const [reportDept, setReportDept] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [reportSortMode, setReportSortMode] = useState<ReportSortMode>("date_first");
+  const [reportSortMode, setReportSortMode] = useState<ReportSortMode>("department_first");
   const [activePreset, setActivePreset] = useState<DatePreset>("today");
   const [showCustom, setShowCustom] = useState(false);
 
@@ -551,9 +563,14 @@ export default function Timesheets() {
       (r.department || "").toLowerCase().includes(term);
   });
 
+  const effectiveReportSortMode: ReportSortMode =
+    activePreset === "this_month" || activePreset === "custom"
+      ? "department_first"
+      : reportSortMode;
+
   const sortedReport = useMemo(
-    () => [...filteredReport].sort((a, b) => compareAttendanceReportRows(a, b, reportSortMode)),
-    [filteredReport, reportSortMode]
+    () => [...filteredReport].sort((a, b) => compareAttendanceReportRows(a, b, effectiveReportSortMode)),
+    [filteredReport, effectiveReportSortMode]
   );
 
   const lateCount = filteredReport.filter((r) => r.status === "late").length;
@@ -874,6 +891,14 @@ export default function Timesheets() {
                       key={preset}
                       type="button"
                       onClick={() => {
+                        if (preset === "time") {
+                          setReportSortMode("time_first");
+                          setActivePreset("time");
+                          setShowCustom(false);
+                          return;
+                        }
+                        // All non-time presets keep the default department-first sequence.
+                        setReportSortMode("department_first");
                         const tz = (timesheetPolicy?.policyTimezone ?? "").trim() || browserTz;
                         const range = resolveDatePreset(preset, tz);
                         setReportFrom(range.from);
@@ -895,6 +920,7 @@ export default function Timesheets() {
                     onClick={() => {
                       setShowCustom((v) => !v);
                       setActivePreset("custom");
+                      setReportSortMode("department_first");
                     }}
                     className={`flex items-center gap-1 rounded-full border px-3.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                       activePreset === "custom"
@@ -915,6 +941,7 @@ export default function Timesheets() {
                         onChange={(e) => {
                           setReportFrom(e.target.value);
                           setActivePreset("custom");
+                          setReportSortMode("department_first");
                         }}
                         className="h-8 w-36 text-xs"
                       />
@@ -925,6 +952,7 @@ export default function Timesheets() {
                         onChange={(e) => {
                           setReportTo(e.target.value);
                           setActivePreset("custom");
+                          setReportSortMode("department_first");
                         }}
                         className="h-8 w-36 text-xs"
                       />
@@ -954,6 +982,7 @@ export default function Timesheets() {
                       <SelectContent>
                         <SelectItem value="department_first">Dept sequence → Emp ID → Date</SelectItem>
                         <SelectItem value="date_first">Date → Dept sequence → Emp ID</SelectItem>
+                        <SelectItem value="time_first">Time → Dept sequence → Emp ID</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
