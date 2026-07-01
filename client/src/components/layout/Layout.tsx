@@ -59,8 +59,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { LOGO_LIGHT } from "@/lib/logo";
 import { CompanyLogo } from "@/components/CompanyLogo";
+import { LOGO_COMPACT } from "@/lib/logo";
 import { useQuery } from "@tanstack/react-query";
 import { isBreakGlassDeveloper, isLoansNavVisible, isNavModuleVisible, canAccessAuditLogs } from "@shared/navModuleCatalog";
 import { canSeeSoftwareGuide } from "@/lib/softwareGuideAccess";
@@ -325,20 +325,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Header */}
       <div className={`h-16 flex items-center ${collapsed ? 'justify-center px-0' : 'justify-between px-6'} border-b border-slate-800 transition-all duration-300`}>
         <Link href="/dashboard" onClick={() => setIsOpen(false)}>
-          <div className="flex items-center gap-3 overflow-hidden rounded-lg cursor-pointer transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
-          <div className={`flex-shrink-0 flex items-center justify-center overflow-hidden bg-transparent ${collapsed ? "w-full" : "min-w-0"}`}>
-            <img
-              src={LOGO_LIGHT}
-              alt="LDP Logistics"
-              className={`object-contain ${collapsed ? "h-14 w-14" : "h-20 w-auto max-w-[260px]"}`}
-            />
+          <div className={`flex items-center overflow-hidden rounded-lg cursor-pointer transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${collapsed ? "justify-center w-full" : "justify-start w-full"}`}>
+          <div className={`flex-shrink-0 flex items-center justify-center overflow-hidden bg-transparent ${collapsed ? "w-full" : "w-full pr-1"}`}>
+            {collapsed ? (
+              <img
+                src={LOGO_COMPACT}
+                alt="LDP"
+                className="h-8 w-12 object-contain"
+              />
+            ) : (
+              <CompanyLogo
+                variant="light"
+                alt="LDP Logistics"
+                className="h-14 w-full max-w-none object-contain object-left"
+              />
+            )}
           </div>
-          {!collapsed && (
-            <div className="animate-in fade-in duration-300 min-w-0">
-              <h1 className="font-display font-bold text-base text-white tracking-tight leading-none truncate">eHire</h1>
-              <p className="text-[10px] text-slate-500 tracking-wider font-semibold mt-0.5">Build Teams That Win.</p>
-            </div>
-          )}
           </div>
         </Link>
       </div>
